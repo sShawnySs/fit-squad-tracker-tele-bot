@@ -52,7 +52,7 @@ export function formatSection(
   return body;
 }
 
-/** The `/board` reply: all-time only. */
+/** The `/score` reply: all-time only. */
 export function formatBoardMessage(rows: BoardRow[], limit = BOARD_LIMIT): string {
   return formatSection("🏆 Scoreboard — all time", rows, limit);
 }

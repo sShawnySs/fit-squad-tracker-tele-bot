@@ -13,9 +13,10 @@ import {
   BOARD_LIMIT,
 } from "./scoreboard.js";
 import {
-  CONFIRMATION_TEMPLATES,
+  bucketFor,
   pickTemplateIndex,
   renderTemplate,
+  templatesFor,
 } from "./templates.js";
 import { formatDateTimeInZone, formatDayInZone, lastSevenDays, safeTimeZone } from "./time.js";
 import type { Activity, Intensity, ScoreEvent } from "./types.js";
@@ -106,7 +107,10 @@ export async function voidEvent(
   return { status: "voided", event: result.event };
 }
 
-/** Picks a non-repeating template for this chat and renders it. */
+/**
+ * Picks a line from the bucket matching the effort, never repeating the last
+ * one used in this chat for that bucket, and renders it.
+ */
 export async function buildConfirmation(
   db: D1Database,
   input: {
@@ -118,15 +122,16 @@ export async function buildConfirmation(
     random?: () => number;
   },
 ): Promise<string> {
-  const lastIndex = await repo.getLastTemplateIndex(db, input.chatId);
+  const bucket = bucketFor(input.intensity);
+  const lastIndex = await repo.getLastTemplateIndex(db, input.chatId, bucket);
   const index = pickTemplateIndex(
     lastIndex,
     input.random ?? Math.random,
-    CONFIRMATION_TEMPLATES.length,
+    templatesFor(bucket).length,
   );
-  await repo.setLastTemplateIndex(db, input.chatId, index);
+  await repo.setLastTemplateIndex(db, input.chatId, bucket, index);
 
-  return renderTemplate(index, {
+  return renderTemplate(bucket, index, {
     name: escapeHtml(input.name),
     activity: input.activity.label.toLowerCase(),
     intensity: input.intensity.label.toLowerCase(),

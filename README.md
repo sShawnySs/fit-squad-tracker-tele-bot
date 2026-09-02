@@ -12,7 +12,7 @@ Runs on Cloudflare Workers + D1, both inside the free tier.
 |---|---|---|
 | `/log` | anyone | Buttons: activity → intensity → confirm. `/log run hard` also works (either order). |
 | `/me` | anyone | Your total and your last 5 entries, with their ids |
-| `/board` | anyone | All-time scoreboard, top 10 if more than 10 people have scored |
+| `/score` | anyone | All-time scoreboard, top 10 if more than 10 people have scored (`/board` also works) |
 | `/activities` | anyone | Valid activity/intensity keys and their point values |
 | `/void <id>` | admins | Voids an entry and says what was voided, by whom |
 | `/help`, `/start` | anyone | Usage; `/start` in a group registers it |
@@ -210,7 +210,7 @@ src/
   repo.ts        D1 queries
   scoring.ts     points = round(base × multiplier)
   scoreboard.ts  ranking with ties, top-10 truncation, formatting
-  templates.ts   ~30 confirmation lines, no immediate repeats
+  templates.ts   30 confirmation lines in 3 intensity buckets
   log-flow.ts    callback-data encoding, /log argument parsing
   admin.ts       cached getChatAdministrators
   time.ts        UTC storage, group-timezone rendering
@@ -219,7 +219,37 @@ migrations/      numbered SQL, including seed data
 test/            vitest, with a D1 shim over node:sqlite
 ```
 
+## Confirmation copy
+
+`src/templates.ts` holds 30 lines split into three buckets — `light`,
+`moderate`, `hard` — because the joke has to scale with the effort. A line is
+picked at random from the bucket matching the intensity, never repeating the one
+used last in that chat for that bucket (`chat_template_state` holds one pointer
+per chat per bucket).
+
+Editing is just editing the array. Two things to keep true:
+
+- No `<`, `>` or `&` in the copy — every message goes out in HTML parse mode.
+  A test enforces this.
+- Placeholders are `{name}`, `{activity}`, `{intensity}`, `{points}`. Lines that
+  name their intensity inline ("a light {activity}") are why buckets can't be
+  shared.
+
+An intensity added to the database later with no bucket of its own falls back by
+multiplier: ≥2.0 gets the hard lines, ≥1.5 moderate, below that light.
+
+The table is exported as `HYPE_TEMPLATES`, one named tone set. A second, calmer
+set plus a `groups.tone` column is the shape a per-group toggle would take —
+see below.
+
 ## Deliberately not built yet
 
 Cross-posting to multiple groups, per-user opt-in, LLM-generated encouragement,
 a web dashboard, streaks and badges. The schema already supports adding them.
+
+Also worth a look once the group has used it for a while: a **tone toggle**. The
+current copy is loud on purpose, which suits a group that wants it and grates on
+a quieter member who just wants their run counted. The templates module is
+already shaped for it — add a second tone set beside `HYPE_TEMPLATES`, a
+`groups.tone` column defaulting to `hype`, and read it in `buildConfirmation`.
+That is a migration and about ten lines; nothing else has to move.

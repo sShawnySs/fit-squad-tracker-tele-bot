@@ -333,10 +333,14 @@ export async function writeAdminCache(
 export async function getLastTemplateIndex(
   db: D1Database,
   chatId: number,
+  bucket: string,
 ): Promise<number | null> {
   const row = await db
-    .prepare(`SELECT last_template_index FROM chat_state WHERE telegram_chat_id = ?1`)
-    .bind(chatId)
+    .prepare(
+      `SELECT last_template_index FROM chat_template_state
+       WHERE telegram_chat_id = ?1 AND bucket = ?2`,
+    )
+    .bind(chatId, bucket)
     .first<{ last_template_index: number | null }>();
   return row?.last_template_index ?? null;
 }
@@ -344,14 +348,17 @@ export async function getLastTemplateIndex(
 export async function setLastTemplateIndex(
   db: D1Database,
   chatId: number,
+  bucket: string,
   index: number,
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO chat_state (telegram_chat_id, last_template_index) VALUES (?1, ?2)
-       ON CONFLICT(telegram_chat_id) DO UPDATE SET last_template_index = excluded.last_template_index`,
+      `INSERT INTO chat_template_state (telegram_chat_id, bucket, last_template_index)
+       VALUES (?1, ?2, ?3)
+       ON CONFLICT(telegram_chat_id, bucket) DO UPDATE SET
+         last_template_index = excluded.last_template_index`,
     )
-    .bind(chatId, index)
+    .bind(chatId, bucket, index)
     .run();
 }
 

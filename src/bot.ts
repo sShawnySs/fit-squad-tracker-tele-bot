@@ -22,7 +22,7 @@ const HELP = [
   "",
   "/log — log a workout (buttons), or <code>/log run hard</code>",
   "/me — your total and last 5 entries",
-  "/board — the scoreboard",
+  "/score — the scoreboard",
   "/activities — valid activities, intensities and point values",
   "/void &lt;id&gt; — admins: void an entry (entry ids show in /me)",
   "/help — this message",
@@ -137,7 +137,9 @@ export function createBot(env: Env): Bot {
     await ctx.reply(await service.buildActivityList(db), { parse_mode: "HTML" });
   });
 
-  bot.command("board", async (ctx) => {
+  // /board stays as an unadvertised alias — it is the word people reach for,
+  // and answering it costs nothing.
+  bot.command(["score", "board"], async (ctx) => {
     await touch(ctx);
     const chatId = await requireGroup(ctx);
     if (chatId === null) return;
