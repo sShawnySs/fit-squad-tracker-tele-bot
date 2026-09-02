@@ -31,6 +31,23 @@ Runs on Cloudflare Workers + D1, both inside the free tier.
 Both tables live in the database, not in code — see
 [Changing point values](#changing-point-values).
 
+## Try it without deploying
+
+The same bot, run from your machine on long polling with a local SQLite file
+instead of D1. Good for using it in a real group before any Cloudflare setup.
+
+```bash
+npm install
+BOT_TOKEN=<your-token> npm run dev:polling
+```
+
+Then add the bot to a group and send `/start`. `npm run dev:weekly` posts the
+Monday message on demand so you can check its wording.
+
+Data lives in `dev.sqlite` (gitignored) and is separate from production. Only
+one process may poll a given bot at a time, and polling stops working once a
+webhook is registered — `deleteWebhook` to go back to polling.
+
 ## Setup
 
 Needs Node 22.5+ and a Cloudflare account.
@@ -171,7 +188,7 @@ npm test         # vitest
 npm run typecheck
 ```
 
-43 tests run against real SQLite in memory (`node:sqlite`), with every migration
+Tests run against real SQLite in memory (`node:sqlite`), with every migration
 applied — so indexes, `ON CONFLICT` and the void filters are exercised for real,
 not mocked. Covered: the full activity × intensity matrix, points frozen on the
 row when values change, void flow and its effect on totals/board/`/me`,
@@ -182,6 +199,10 @@ top-10 truncation, HTML escaping, and the weekly window.
 ## Layout
 
 ```
+dev/
+  local-d1.ts    D1 shim over node:sqlite (tests + local runner)
+  polling.ts     run the bot locally, no Cloudflare needed
+  weekly.ts      post the weekly scoreboard on demand, locally
 src/
   index.ts       Worker entry: webhook auth, fast ack, cron handler
   bot.ts         grammY handlers (thin glue)

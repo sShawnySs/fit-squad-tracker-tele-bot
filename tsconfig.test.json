@@ -5,5 +5,5 @@
     // runtime, so both type sets are in scope here and only here.
     "types": ["@cloudflare/workers-types", "node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "dev/**/*.ts"]
 }
