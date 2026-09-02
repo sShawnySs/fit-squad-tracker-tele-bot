@@ -19,7 +19,7 @@ ADMIN_CACHE_TTL_SECONDS = "600"
 binding = "DB"
 database_name = "scoreboard"
 # Replace with the id printed by: npx wrangler d1 create scoreboard
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "0fb5ac14-4fe1-463e-8f37-6bb87bfb4a79"
 migrations_dir = "migrations"
 
 # Secrets (never put these here — use `npx wrangler secret put NAME`):
