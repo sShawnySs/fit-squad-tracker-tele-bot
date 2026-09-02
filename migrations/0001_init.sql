@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS groups (
   created_at       TEXT NOT NULL
 );
 
+-- The three scoring axes. All three are data, not code: point values can be
+-- changed with a SQL statement and no deploy.
 CREATE TABLE IF NOT EXISTS activities (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   key         TEXT NOT NULL UNIQUE,
@@ -34,15 +36,25 @@ CREATE TABLE IF NOT EXISTS intensities (
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS durations (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  key        TEXT NOT NULL UNIQUE,
+  label      TEXT NOT NULL,
+  multiplier REAL NOT NULL,
+  active     INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
 -- The ledger. Append-only: corrections void, they never delete.
--- activity_key/intensity_key are kept alongside the resolved points so that
--- editing base_points or multipliers later never rewrites history.
+-- The three keys are kept alongside the resolved points so that editing a
+-- base value or a multiplier later never rewrites history.
 CREATE TABLE IF NOT EXISTS score_events (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
   telegram_chat_id   INTEGER NOT NULL,
   telegram_user_id   INTEGER NOT NULL,
   activity_key       TEXT    NOT NULL,
   intensity_key      TEXT    NOT NULL,
+  duration_key       TEXT    NOT NULL DEFAULT 'standard',
   points             INTEGER NOT NULL,
   source_message_id  INTEGER,
   created_at         TEXT    NOT NULL,
@@ -68,10 +80,4 @@ CREATE TABLE IF NOT EXISTS chat_admins (
 CREATE TABLE IF NOT EXISTS chat_admin_cache (
   telegram_chat_id INTEGER PRIMARY KEY,
   fetched_at       TEXT NOT NULL
-);
-
--- Last confirmation template used per chat, so the bot never repeats back to back.
-CREATE TABLE IF NOT EXISTS chat_state (
-  telegram_chat_id     INTEGER PRIMARY KEY,
-  last_template_index  INTEGER
 );

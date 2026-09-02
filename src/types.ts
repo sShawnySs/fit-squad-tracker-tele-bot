@@ -22,6 +22,14 @@ export interface Intensity {
   sort_order: number;
 }
 
+export interface Duration {
+  key: string;
+  label: string;
+  multiplier: number;
+  active: number;
+  sort_order: number;
+}
+
 export interface Group {
   telegram_chat_id: number;
   title: string | null;
@@ -35,6 +43,7 @@ export interface ScoreEvent {
   telegram_user_id: number;
   activity_key: string;
   intensity_key: string;
+  duration_key: string;
   points: number;
   source_message_id: number | null;
   created_at: string;

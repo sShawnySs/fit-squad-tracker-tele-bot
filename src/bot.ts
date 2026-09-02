@@ -8,22 +8,23 @@ import {
   encodeActivityPick,
   encodeCancel,
   encodeConfirm,
+  encodeDurationPick,
   encodeIntensityPick,
   matchLogArgs,
   parseCallback,
 } from "./log-flow.js";
 import * as repo from "./repo.js";
-import { scoreFor } from "./scoring.js";
+import { DEFAULT_DURATION_KEY, scoreFor } from "./scoring.js";
 import * as service from "./service.js";
 import type { Env } from "./types.js";
 
 const HELP = [
   "<b>Activity scoreboard</b>",
   "",
-  "/log — log a workout (buttons), or <code>/log run hard</code>",
+  "/log — log a workout (buttons), or <code>/log cardio hard</code>",
   "/me — your total and last 5 entries",
   "/score — the scoreboard",
-  "/activities — valid activities, intensities and point values",
+  "/activities — activities, intensities, durations and how points are worked out",
   "/void &lt;id&gt; — admins: void an entry (entry ids show in /me)",
   "/help — this message",
 ].join("\n");
@@ -112,6 +113,31 @@ export function createBot(env: Env): Bot {
     return keyboard;
   }
 
+  async function durationKeyboard(
+    userId: number,
+    activityKey: string,
+    intensityKey: string,
+  ): Promise<InlineKeyboard> {
+    const durations = await repo.listDurations(db);
+    const keyboard = new InlineKeyboard();
+    durations.forEach((duration, index) => {
+      keyboard.text(
+        duration.label,
+        encodeDurationPick(userId, activityKey, intensityKey, duration.key),
+      );
+      if (index % 2 === 1) keyboard.row();
+    });
+    // Nobody should be forced through a step they don't care about.
+    keyboard
+      .row()
+      .text(
+        "Skip",
+        encodeDurationPick(userId, activityKey, intensityKey, DEFAULT_DURATION_KEY),
+      )
+      .text("Cancel", encodeCancel(userId));
+    return keyboard;
+  }
+
   /* ------------------------------------------------------------- commands --- */
 
   bot.command("start", async (ctx) => {
@@ -173,19 +199,21 @@ export function createBot(env: Env): Bot {
       .filter(Boolean);
 
     if (tokens.length > 0) {
-      const [activities, intensities] = await Promise.all([
+      const [activities, intensities, durations] = await Promise.all([
         repo.listActivities(db),
         repo.listIntensities(db),
+        repo.listDurations(db),
       ]);
-      const { activityKey, intensityKey } = matchLogArgs(
+      const { activityKey, intensityKey, durationKey } = matchLogArgs(
         tokens,
         activities.map((a) => a.key),
         intensities.map((i) => i.key),
+        durations.map((d) => d.key),
       );
 
       if (!activityKey || !intensityKey) {
         await ctx.reply(
-          `I didn't catch that. Try <code>/log run hard</code>, or just /log for buttons.\n\n${await service.buildActivityList(
+          `I didn't catch that. Try <code>/log cardio hard</code>, or just /log for buttons.\n\n${await service.buildActivityList(
             db,
           )}`,
           { parse_mode: "HTML" },
@@ -198,6 +226,8 @@ export function createBot(env: Env): Bot {
         userId: ctx.from.id,
         activityKey,
         intensityKey,
+        // Not given in the shorthand: service applies the default.
+        ...(durationKey ? { durationKey } : {}),
         sourceMessageId: ctx.msg.message_id,
       });
       await replyToLogOutcome(ctx, chatId, outcome);
@@ -323,18 +353,41 @@ export function createBot(env: Env): Bot {
         await ctx.answerCallbackQuery({ text: "That option is no longer available." });
         return;
       }
-      const points = scoreFor(activity, intensity);
       await ctx.answerCallbackQuery();
       await ctx.editMessageText(
         `<b>${escapeHtml(intensity.label)} ${escapeHtml(
           activity.label.toLowerCase(),
-        )}</b> — ${points} pts. Log it?`,
+        )}</b> — how long?`,
+        {
+          parse_mode: "HTML",
+          reply_markup: await durationKeyboard(presser.id, activity.key, intensity.key),
+        },
+      );
+      return;
+    }
+
+    if (parsed.step === "duration") {
+      const [activity, intensity, duration] = await Promise.all([
+        repo.getActivity(db, parsed.activityKey),
+        repo.getIntensity(db, parsed.intensityKey),
+        repo.getDuration(db, parsed.durationKey),
+      ]);
+      if (!activity || !intensity || !duration) {
+        await ctx.answerCallbackQuery({ text: "That option is no longer available." });
+        return;
+      }
+      const points = scoreFor(activity, intensity, duration);
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText(
+        `<b>${escapeHtml(intensity.label)} ${escapeHtml(
+          activity.label.toLowerCase(),
+        )}</b>, ${escapeHtml(duration.label)} — ${points} pts. Log it?`,
         {
           parse_mode: "HTML",
           reply_markup: new InlineKeyboard()
             .text(
               `Log ${points} pts`,
-              encodeConfirm(presser.id, activity.key, intensity.key),
+              encodeConfirm(presser.id, activity.key, intensity.key, duration.key),
             )
             .text("Cancel", encodeCancel(presser.id)),
         },
@@ -349,10 +402,15 @@ export function createBot(env: Env): Bot {
       userId: presser.id,
       activityKey: parsed.activityKey,
       intensityKey: parsed.intensityKey,
+      durationKey: parsed.durationKey,
       sourceMessageId,
     });
 
-    if (outcome.status === "unknown_activity" || outcome.status === "unknown_intensity") {
+    if (
+      outcome.status === "unknown_activity" ||
+      outcome.status === "unknown_intensity" ||
+      outcome.status === "unknown_duration"
+    ) {
       await ctx.answerCallbackQuery({ text: "That option is no longer available." });
       return;
     }
@@ -368,6 +426,7 @@ export function createBot(env: Env): Bot {
       name: displayNameOf(presser),
       activity: outcome.activity,
       intensity: outcome.intensity,
+      duration: outcome.duration,
       points: outcome.event.points,
     });
     await ctx.editMessageText(`${text}\n<i>#${outcome.event.id}</i>`, {
@@ -400,6 +459,15 @@ export function createBot(env: Env): Bot {
       );
       return;
     }
+    if (outcome.status === "unknown_duration") {
+      await ctx.reply(
+        `I don't know the duration "<code>${escapeHtml(
+          outcome.durationKey,
+        )}</code>".\n\n${await service.buildActivityList(db)}`,
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
     if (outcome.status === "duplicate") return; // a retried update; already counted
 
     const text = await service.buildConfirmation(db, {
@@ -407,6 +475,7 @@ export function createBot(env: Env): Bot {
       name: displayNameOf(ctx.from),
       activity: outcome.activity,
       intensity: outcome.intensity,
+      duration: outcome.duration,
       points: outcome.event.points,
     });
     await ctx.reply(`${text}\n<i>#${outcome.event.id}</i>`, { parse_mode: "HTML" });

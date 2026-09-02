@@ -1,6 +1,7 @@
 import type {
   Activity,
   BoardRow,
+  Duration,
   Group,
   Intensity,
   ScoreEvent,
@@ -101,6 +102,26 @@ export function getIntensity(db: D1Database, key: string): Promise<Intensity | n
     .first<Intensity>();
 }
 
+export async function listDurations(db: D1Database): Promise<Duration[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT key, label, multiplier, active, sort_order FROM durations
+       WHERE active = 1 ORDER BY sort_order, key`,
+    )
+    .all<Duration>();
+  return results ?? [];
+}
+
+export function getDuration(db: D1Database, key: string): Promise<Duration | null> {
+  return db
+    .prepare(
+      `SELECT key, label, multiplier, active, sort_order FROM durations
+       WHERE key = ?1 AND active = 1`,
+    )
+    .bind(key)
+    .first<Duration>();
+}
+
 export interface LogResult {
   /** false when this source_message_id was already logged (a Telegram retry). */
   inserted: boolean;
@@ -118,6 +139,7 @@ export async function insertScoreEvent(
     userId: number;
     activityKey: string;
     intensityKey: string;
+    durationKey: string;
     points: number;
     sourceMessageId: number | null;
     nowIso: string;
@@ -127,8 +149,8 @@ export async function insertScoreEvent(
     .prepare(
       `INSERT INTO score_events
          (telegram_chat_id, telegram_user_id, activity_key, intensity_key,
-          points, source_message_id, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+          duration_key, points, source_message_id, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
        ON CONFLICT (telegram_chat_id, source_message_id) DO NOTHING
        RETURNING *`,
     )
@@ -137,6 +159,7 @@ export async function insertScoreEvent(
       input.userId,
       input.activityKey,
       input.intensityKey,
+      input.durationKey,
       input.points,
       input.sourceMessageId,
       input.nowIso,

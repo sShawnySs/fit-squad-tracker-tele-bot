@@ -6,7 +6,7 @@
 
 import { escapeHtml } from "./html.js";
 import * as repo from "./repo.js";
-import { scoreFor } from "./scoring.js";
+import { DEFAULT_DURATION_KEY, scoreFor } from "./scoring.js";
 import {
   formatBoardMessage,
   formatWeeklyMessage,
@@ -19,16 +19,18 @@ import {
   templatesFor,
 } from "./templates.js";
 import { formatDateTimeInZone, formatDayInZone, lastSevenDays, safeTimeZone } from "./time.js";
-import type { Activity, Intensity, ScoreEvent } from "./types.js";
+import type { Activity, Duration, Intensity, ScoreEvent } from "./types.js";
 
 export type LogOutcome =
   | { status: "unknown_activity"; activityKey: string }
   | { status: "unknown_intensity"; intensityKey: string }
+  | { status: "unknown_duration"; durationKey: string }
   | {
       status: "logged" | "duplicate";
       event: ScoreEvent;
       activity: Activity;
       intensity: Intensity;
+      duration: Duration;
     };
 
 export async function logActivity(
@@ -38,6 +40,8 @@ export async function logActivity(
     userId: number;
     activityKey: string;
     intensityKey: string;
+    /** Omitted when someone skips the step or uses the shorthand. */
+    durationKey?: string;
     sourceMessageId: number | null;
     now?: Date;
   },
@@ -49,7 +53,11 @@ export async function logActivity(
   if (!intensity)
     return { status: "unknown_intensity", intensityKey: input.intensityKey };
 
-  const points = scoreFor(activity, intensity);
+  const durationKey = input.durationKey ?? DEFAULT_DURATION_KEY;
+  const duration = await repo.getDuration(db, durationKey);
+  if (!duration) return { status: "unknown_duration", durationKey };
+
+  const points = scoreFor(activity, intensity, duration);
   const nowIso = (input.now ?? new Date()).toISOString();
 
   const result = await repo.insertScoreEvent(db, {
@@ -57,6 +65,7 @@ export async function logActivity(
     userId: input.userId,
     activityKey: activity.key,
     intensityKey: intensity.key,
+    durationKey: duration.key,
     points,
     sourceMessageId: input.sourceMessageId,
     nowIso,
@@ -67,6 +76,7 @@ export async function logActivity(
     event: result.event,
     activity,
     intensity,
+    duration,
   };
 }
 
@@ -118,6 +128,7 @@ export async function buildConfirmation(
     name: string;
     activity: Activity;
     intensity: Intensity;
+    duration: Duration;
     points: number;
     random?: () => number;
   },
@@ -131,10 +142,13 @@ export async function buildConfirmation(
   );
   await repo.setLastTemplateIndex(db, input.chatId, bucket, index);
 
+  // Labels come from the database, so they are escaped too — a "<15 min" label
+  // would otherwise break the HTML parse mode.
   return renderTemplate(bucket, index, {
     name: escapeHtml(input.name),
-    activity: input.activity.label.toLowerCase(),
-    intensity: input.intensity.label.toLowerCase(),
+    activity: escapeHtml(input.activity.label.toLowerCase()),
+    intensity: escapeHtml(input.intensity.label.toLowerCase()),
+    duration: escapeHtml(input.duration.label),
     points: input.points,
   });
 }
@@ -186,35 +200,42 @@ export async function buildMe(
   const lines = recent.map(
     (e) =>
       `#${e.id} · ${formatDateTimeInZone(e.created_at, zone)} — ${escapeHtml(
-        e.intensity_key,
-      )} ${escapeHtml(e.activity_key)} · ${e.points} pts`,
+        e.activity_key,
+      )}, ${escapeHtml(e.intensity_key)}, ${escapeHtml(e.duration_key)} · ${e.points} pts`,
   );
   return `${header}\n<b>Last ${recent.length}:</b>\n${lines.join("\n")}`;
 }
 
 export async function buildActivityList(db: D1Database): Promise<string> {
-  const [activities, intensities] = await Promise.all([
+  const [activities, intensities, durations] = await Promise.all([
     repo.listActivities(db),
     repo.listIntensities(db),
+    repo.listDurations(db),
   ]);
 
   const activityLines = activities.map(
-    (a) => `<code>${escapeHtml(a.key)}</code> — ${escapeHtml(a.label)}, ${a.base_points} base`,
+    (a) =>
+      `<code>${escapeHtml(a.key)}</code> — ${escapeHtml(a.label)}, ${a.base_points} base`,
   );
-  const intensityLines = intensities.map(
-    (i) =>
-      `<code>${escapeHtml(i.key)}</code> — ${escapeHtml(i.label)}, x${Number(
-        i.multiplier.toFixed(2),
-      )}`,
-  );
+  const multiplierLine = (m: { key: string; label: string; multiplier: number }) =>
+    `<code>${escapeHtml(m.key)}</code> — ${escapeHtml(m.label)}, ×${Number(
+      m.multiplier.toFixed(2),
+    )}`;
 
   return [
-    "<b>Activities</b>",
+    "<b>How points work</b>",
+    "points = base × intensity × duration",
+    "",
+    "<b>Activity</b>",
     activityLines.join("\n") || "none",
     "",
-    "<b>Intensities</b>",
-    intensityLines.join("\n") || "none",
+    "<b>Intensity</b>",
+    intensities.map(multiplierLine).join("\n") || "none",
     "",
-    "points = base × multiplier. Log with /log, or straight up: <code>/log run hard</code>",
+    "<b>Duration</b>",
+    durations.map(multiplierLine).join("\n") || "none",
+    "",
+    "Log with /log for buttons, or in one line: <code>/log cardio hard</code>",
+    `(duration defaults to ${escapeHtml(DEFAULT_DURATION_KEY)} — add it to be exact: <code>/log sport max long</code>)`,
   ].join("\n");
 }

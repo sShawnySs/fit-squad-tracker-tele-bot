@@ -15,21 +15,19 @@ describe("duplicate source_message_id", () => {
     await seedChat(db, -100, [{ id: 1, name: "Alex" }]);
 
     const first = await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "run", intensityKey: "hard", sourceMessageId: 77,
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "hard", sourceMessageId: 77,
     });
     const retry = await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "run", intensityKey: "hard", sourceMessageId: 77,
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "hard", sourceMessageId: 77,
     });
 
     expect(first.status).toBe("logged");
     expect(retry.status).toBe("duplicate");
-    if (first.status === "unknown_activity" || first.status === "unknown_intensity")
-      throw new Error("unreachable");
-    if (retry.status === "unknown_activity" || retry.status === "unknown_intensity")
-      throw new Error("unreachable");
+    if (first.status !== "logged") throw new Error("unreachable");
+    if (retry.status !== "duplicate") throw new Error("unreachable");
 
     expect(retry.event.id).toBe(first.event.id);
-    expect(await repo.getUserTotal(db, -100, 1)).toBe(20);
+    expect(await repo.getUserTotal(db, -100, 1)).toBe(16);
   });
 
   it("does not resurrect a voided entry when the update is retried", async () => {
@@ -37,7 +35,7 @@ describe("duplicate source_message_id", () => {
     await seedChat(db, -100, [{ id: 1, name: "Alex" }]);
 
     const first = await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "gym", intensityKey: "light", sourceMessageId: 5,
+      chatId: -100, userId: 1, activityKey: "strength", intensityKey: "light", sourceMessageId: 5,
     });
     if (first.status !== "logged") throw new Error("unreachable");
 
@@ -46,7 +44,7 @@ describe("duplicate source_message_id", () => {
     });
 
     const retry = await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "gym", intensityKey: "light", sourceMessageId: 5,
+      chatId: -100, userId: 1, activityKey: "strength", intensityKey: "light", sourceMessageId: 5,
     });
     expect(retry.status).toBe("duplicate");
     expect(await repo.getUserTotal(db, -100, 1)).toBe(0);
@@ -58,10 +56,10 @@ describe("duplicate source_message_id", () => {
     await seedChat(db, -200, [{ id: 1, name: "Alex" }]);
 
     const a = await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "run", intensityKey: "light", sourceMessageId: 9,
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "light", sourceMessageId: 9,
     });
     const b = await service.logActivity(db, {
-      chatId: -200, userId: 1, activityKey: "run", intensityKey: "light", sourceMessageId: 9,
+      chatId: -200, userId: 1, activityKey: "cardio", intensityKey: "light", sourceMessageId: 9,
     });
 
     expect(a.status).toBe("logged");
@@ -73,14 +71,14 @@ describe("duplicate source_message_id", () => {
     await seedChat(db, -100, [{ id: 1, name: "Alex" }]);
 
     const a = await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "run", intensityKey: "light", sourceMessageId: null,
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "light", sourceMessageId: null,
     });
     const b = await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "run", intensityKey: "light", sourceMessageId: null,
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "light", sourceMessageId: null,
     });
 
     expect(a.status).toBe("logged");
     expect(b.status).toBe("logged");
-    expect(await repo.getUserTotal(db, -100, 1)).toBe(20);
+    expect(await repo.getUserTotal(db, -100, 1)).toBe(18); // 9 + 9
   });
 });

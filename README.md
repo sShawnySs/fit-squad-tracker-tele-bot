@@ -10,26 +10,34 @@ Runs on Cloudflare Workers + D1, both inside the free tier.
 
 | Command | Who | What it does |
 |---|---|---|
-| `/log` | anyone | Buttons: activity → intensity → confirm. `/log run hard` also works (either order). |
+| `/log` | anyone | Buttons: activity → intensity → duration → confirm. `/log cardio hard` also works (any order, duration optional). |
 | `/me` | anyone | Your total and your last 5 entries, with their ids |
 | `/score` | anyone | All-time scoreboard, top 10 if more than 10 people have scored (`/board` also works) |
-| `/activities` | anyone | Valid activity/intensity keys and their point values |
+| `/activities` | anyone | All three tables and how points are worked out |
 | `/void <id>` | admins | Voids an entry and says what was voided, by whom |
 | `/help`, `/start` | anyone | Usage; `/start` in a group registers it |
 
 ## Scoring
 
-`points = round(base_points × multiplier)`
+`points = round(base_points × intensity multiplier × duration multiplier)`
 
-| Activity | Base | | Intensity | Multiplier |
-|---|---|---|---|---|
-| run | 10 | | light | 1.0 |
-| gym | 10 | | moderate | 1.5 |
-| swim | 12 | | hard | 2.0 |
-| walk | 5 | | | |
+Three axes. Activity collapsed to three broad categories, so duration is what
+recovers the difference between a ten-minute effort and an hour of the same
+thing.
 
-Both tables live in the database, not in code — see
-[Changing point values](#changing-point-values).
+| Activity | Base | | Intensity | × | | Duration | × |
+|---|---|---|---|---|---|---|---|
+| cardio | 6 | | light | 1.0 | | quick (<15 min) | 0.5 |
+| strength | 6 | | moderate | 1.4 | | short (15–30 min) | 1.0 |
+| sport | 7 | | hard | 1.8 | | standard (30–60 min) | 1.5 |
+| | | | max | 2.3 | | long (60+ min) | 2.0 |
+
+Worked examples: cardio/light/quick = 3, strength/hard/standard = 16,
+sport/max/long = 32. The range is 3–32, so no score is ever zero.
+
+Duration defaults to `standard` when someone presses **Skip** in the button flow
+or uses the shorthand without it. All three tables live in the database, not in
+code — see [Changing point values](#changing-point-values).
 
 ## Try it without deploying
 
@@ -133,25 +141,32 @@ curl "http://localhost:8787/__scheduled?cron=0+1+*+*+1"
 
 ## Changing point values
 
-Values live in `activities` and `intensities`, so a change is one SQL statement,
-no deploy:
+Values live in `activities`, `intensities` and `durations`, so a change is one
+SQL statement, no deploy:
 
 ```bash
 npx wrangler d1 execute scoreboard --remote \
-  --command "UPDATE activities SET base_points = 12 WHERE key = 'run'"
+  --command "UPDATE activities SET base_points = 8 WHERE key = 'sport'"
+
+npx wrangler d1 execute scoreboard --remote \
+  --command "UPDATE durations SET multiplier = 2.5 WHERE key = 'long'"
 
 npx wrangler d1 execute scoreboard --remote \
   --command "INSERT INTO activities (key, label, base_points, active, sort_order)
-             VALUES ('cycle', 'Cycle', 8, 1, 5)"
+             VALUES ('mobility', 'Mobility', 4, 1, 4)"
 
 # retire one without losing its history
 npx wrangler d1 execute scoreboard --remote \
-  --command "UPDATE activities SET active = 0 WHERE key = 'walk'"
+  --command "UPDATE activities SET active = 0 WHERE key = 'sport'"
 ```
 
 Existing entries keep the points they were written with — each `score_events`
-row stores the resolved `points`, so editing a multiplier never rewrites
-anyone's past score.
+row stores `activity_key`, `intensity_key`, `duration_key` **and** the resolved
+`points`, so editing a multiplier never rewrites anyone's past score.
+
+The seed INSERTs in `0002_seed_scoring.sql` are `ON CONFLICT DO NOTHING`, so
+re-running migrations will not clobber a value you changed live. To change a
+seeded value in a database that already has it, run an `UPDATE`.
 
 ## How the data works
 
@@ -190,8 +205,9 @@ npm run typecheck
 
 Tests run against real SQLite in memory (`node:sqlite`), with every migration
 applied — so indexes, `ON CONFLICT` and the void filters are exercised for real,
-not mocked. Covered: the full activity × intensity matrix, points frozen on the
-row when values change, void flow and its effect on totals/board/`/me`,
+not mocked. Covered: all 48 activity × intensity × duration combinations, the
+3–32 range, duration defaulting to standard, points frozen on the row when
+values change, void flow and its effect on totals/board/`/me`,
 non-admins rejected from `/void`, cross-chat isolation, duplicate
 `source_message_id`, admin cache TTL and failure fallback, ranking with ties,
 top-10 truncation, HTML escaping, and the weekly window.
@@ -208,7 +224,7 @@ src/
   bot.ts         grammY handlers (thin glue)
   service.ts     the rules — logging, voiding, message building
   repo.ts        D1 queries
-  scoring.ts     points = round(base × multiplier)
+  scoring.ts     points = round(base × intensity × duration)
   scoreboard.ts  ranking with ties, top-10 truncation, formatting
   templates.ts   30 confirmation lines in 3 intensity buckets
   log-flow.ts    callback-data encoding, /log argument parsing

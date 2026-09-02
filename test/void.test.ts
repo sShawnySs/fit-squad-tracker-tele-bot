@@ -8,7 +8,7 @@ async function log(db: D1Database, messageId: number, userId = 1) {
   const outcome = await service.logActivity(db, {
     chatId: -100,
     userId,
-    activityKey: "run",
+    activityKey: "cardio",
     intensityKey: "hard",
     sourceMessageId: messageId,
   });
@@ -32,7 +32,7 @@ describe("/void", () => {
     expect(outcome.status).toBe("forbidden");
     const stored = await repo.getScoreEvent(db, -100, event.id);
     expect(stored?.voided_at).toBeNull();
-    expect(await repo.getUserTotal(db, -100, 1)).toBe(20);
+    expect(await repo.getUserTotal(db, -100, 1)).toBe(16);
   });
 
   it("voids rather than deletes, and records who did it", async () => {
@@ -52,7 +52,7 @@ describe("/void", () => {
     expect(stored).not.toBeNull();
     expect(stored!.voided_at).toBeTruthy();
     expect(stored!.voided_by_user_id).toBe(9);
-    expect(stored!.points).toBe(20); // the row keeps its points, it just stops counting
+    expect(stored!.points).toBe(16); // the row keeps its points, it just stops counting
   });
 
   it("removes the entry from totals, /me and the board", async () => {
@@ -60,15 +60,15 @@ describe("/void", () => {
     await seedChat(db, -100, [{ id: 1, name: "Alex" }]);
     const first = await log(db, 1);
     await log(db, 2);
-    expect(await repo.getUserTotal(db, -100, 1)).toBe(40);
+    expect(await repo.getUserTotal(db, -100, 1)).toBe(32);
 
     await service.voidEvent(db, {
       chatId: -100, requesterId: 1, requesterIsAdmin: true, eventId: first.id,
     });
 
-    expect(await repo.getUserTotal(db, -100, 1)).toBe(20);
+    expect(await repo.getUserTotal(db, -100, 1)).toBe(16);
     expect(await repo.getBoard(db, -100)).toEqual([
-      { user_id: 1, name: "Alex", total: 20 },
+      { user_id: 1, name: "Alex", total: 16 },
     ]);
     const recent = await repo.getUserRecentEvents(db, -100, 1);
     expect(recent.map((e) => e.id)).not.toContain(first.id);

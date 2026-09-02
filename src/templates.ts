@@ -71,6 +71,8 @@ export interface TemplateVars {
   name: string;
   activity: string;
   intensity: string;
+  /** Available to templates as {duration}; unused by the current copy. */
+  duration: string;
   points: number;
 }
 
@@ -103,5 +105,6 @@ export function renderTemplate(
     .replaceAll("{name}", vars.name)
     .replaceAll("{activity}", vars.activity)
     .replaceAll("{intensity}", vars.intensity)
+    .replaceAll("{duration}", vars.duration)
     .replaceAll("{points}", String(vars.points));
 }

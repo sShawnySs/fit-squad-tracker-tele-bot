@@ -78,22 +78,22 @@ describe("board queries", () => {
     await seedChat(db, -200, [{ id: 3, name: "Jo" }]);
 
     await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "run", intensityKey: "hard", sourceMessageId: 1,
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "hard", sourceMessageId: 1,
     });
     await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "walk", intensityKey: "light", sourceMessageId: 2,
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "light", sourceMessageId: 2,
     });
     await service.logActivity(db, {
-      chatId: -100, userId: 2, activityKey: "swim", intensityKey: "moderate", sourceMessageId: 3,
+      chatId: -100, userId: 2, activityKey: "sport", intensityKey: "moderate", sourceMessageId: 3,
     });
     await service.logActivity(db, {
-      chatId: -200, userId: 3, activityKey: "run", intensityKey: "hard", sourceMessageId: 4,
+      chatId: -200, userId: 3, activityKey: "cardio", intensityKey: "hard", sourceMessageId: 4,
     });
 
     const board = await repo.getBoard(db, -100);
     expect(board).toEqual([
       { user_id: 1, name: "Alex", total: 25 },
-      { user_id: 2, name: "Sam", total: 18 },
+      { user_id: 2, name: "Sam", total: 15 },
     ]);
   });
 
@@ -105,19 +105,19 @@ describe("board queries", () => {
     const twoDaysAgo = new Date(now.getTime() - 2 * 864e5);
 
     await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "run", intensityKey: "hard",
+      chatId: -100, userId: 1, activityKey: "cardio", intensityKey: "hard",
       sourceMessageId: 1, now: tenDaysAgo,
     });
     await service.logActivity(db, {
-      chatId: -100, userId: 1, activityKey: "gym", intensityKey: "light",
+      chatId: -100, userId: 1, activityKey: "strength", intensityKey: "light",
       sourceMessageId: 2, now: twoDaysAgo,
     });
 
     const allTime = await repo.getBoard(db, -100, null);
-    expect(allTime[0]!.total).toBe(30);
+    expect(allTime[0]!.total).toBe(25); // 16 + 9
 
     const weekly = await service.buildWeekly(db, -100, "Asia/Singapore", now);
-    expect(weekly).toContain("1. Alex — 10"); // only the 2-days-ago gym entry
+    expect(weekly).toContain("1. Alex — 9"); // only the 2-days-ago strength entry
     expect(weekly).toContain("All time");
     expect(weekly).toContain("26 Aug to 2 Sep");
   });
