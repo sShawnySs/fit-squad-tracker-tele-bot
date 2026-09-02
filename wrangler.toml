@@ -1,0 +1,27 @@
+name = "telegram-scoreboard-bot"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# The weekly scoreboard post. Cron is always UTC.
+# "0 1 * * 1" = 01:00 UTC Monday = 09:00 Monday in Asia/Singapore (UTC+8).
+# Change this if your group is in another timezone.
+[triggers]
+crons = ["0 1 * * 1"]
+
+[vars]
+# Timezone used for a group until /start records the chat (see groups.timezone).
+DEFAULT_TIMEZONE = "Asia/Singapore"
+# How long a cached getChatAdministrators result stays fresh, in seconds.
+ADMIN_CACHE_TTL_SECONDS = "600"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "scoreboard"
+# Replace with the id printed by: npx wrangler d1 create scoreboard
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Secrets (never put these here — use `npx wrangler secret put NAME`):
+#   BOT_TOKEN       Telegram bot token from @BotFather
+#   WEBHOOK_SECRET  random string, also passed as secret_token when registering the webhook
