@@ -117,6 +117,37 @@ export async function voidEvent(
   return { status: "voided", event: result.event };
 }
 
+export type ResetOutcome =
+  | { status: "forbidden" }
+  | { status: "empty" }
+  | { status: "reset"; voided: number };
+
+/**
+ * /reset is admin-only. Voids every live entry in the chat in one shot, so the
+ * scoreboard goes to zero — but, exactly like /void, nothing is deleted and the
+ * rows keep their points. The caller passes the resolved admin verdict.
+ */
+export async function resetChat(
+  db: D1Database,
+  input: {
+    chatId: number;
+    requesterId: number;
+    requesterIsAdmin: boolean;
+    now?: Date;
+  },
+): Promise<ResetOutcome> {
+  if (!input.requesterIsAdmin) return { status: "forbidden" };
+
+  const nowIso = (input.now ?? new Date()).toISOString();
+  const voided = await repo.voidAllEvents(
+    db,
+    input.chatId,
+    input.requesterId,
+    nowIso,
+  );
+  return voided === 0 ? { status: "empty" } : { status: "reset", voided };
+}
+
 /**
  * Picks a line from the bucket matching the effort, never repeating the last
  * one used in this chat for that bucket, and renders it.

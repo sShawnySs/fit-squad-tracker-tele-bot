@@ -15,6 +15,7 @@ Runs on Cloudflare Workers + D1, both inside the free tier.
 | `/score` | anyone | All-time scoreboard, top 10 if more than 10 people have scored (`/board` also works) |
 | `/activities` | anyone | All three tables and how points are worked out |
 | `/void <id>` | admins | Voids an entry and says what was voided, by whom |
+| `/reset` | admins | Clears the whole scoreboard. Replies with the entry count; run `/reset CONFIRM` to go through. Entries are voided, not deleted. |
 | `/help`, `/start` | anyone | Usage; `/start` in a group registers it |
 
 ## Scoring

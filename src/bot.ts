@@ -26,6 +26,7 @@ const HELP = [
   "/score — the scoreboard",
   "/activities — activities, intensities, durations and how points are worked out",
   "/void &lt;id&gt; — admins: void an entry (entry ids show in /me)",
+  "/reset — admins: clear the whole scoreboard (asks you to confirm)",
   "/help — this message",
 ].join("\n");
 
@@ -291,6 +292,66 @@ export function createBot(env: Env): Bot {
       )} (${outcome.event.points} pts) logged by ${escapeHtml(owner)}.\nVoided by ${escapeHtml(
         displayNameOf(ctx.from),
       )}.`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.command("reset", async (ctx) => {
+    await touch(ctx);
+    const chatId = await requireGroup(ctx);
+    if (chatId === null || !ctx.from) return;
+
+    const requesterIsAdmin = await isAdmin(ctx.from.id, {
+      db,
+      chatId,
+      ttlSeconds: adminTtl,
+      fetchAdmins: async () => {
+        const admins = await ctx.api.getChatAdministrators(chatId);
+        return admins.map((a) => a.user.id);
+      },
+    });
+
+    if (!requesterIsAdmin) {
+      await ctx.reply("Only group admins can reset the scoreboard.");
+      return;
+    }
+
+    const confirmed =
+      (ctx.match ?? "").toString().trim().toLowerCase() === "confirm";
+
+    if (!confirmed) {
+      const live = await repo.countActiveEvents(db, chatId);
+      if (live === 0) {
+        await ctx.reply("The scoreboard is already empty — nothing to reset.");
+        return;
+      }
+      await ctx.reply(
+        `This clears all <b>${live}</b> ${live === 1 ? "entry" : "entries"} in this group and zeroes every total. ` +
+          `Entries are voided, not deleted.\n\nSend <code>/reset CONFIRM</code> to go ahead.`,
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
+
+    const outcome = await service.resetChat(db, {
+      chatId,
+      requesterId: ctx.from.id,
+      requesterIsAdmin,
+    });
+
+    if (outcome.status === "forbidden") {
+      await ctx.reply("Only group admins can reset the scoreboard.");
+      return;
+    }
+    if (outcome.status === "empty") {
+      await ctx.reply("The scoreboard is already empty — nothing to reset.");
+      return;
+    }
+
+    await ctx.reply(
+      `Scoreboard reset by ${escapeHtml(displayNameOf(ctx.from))} — ${outcome.voided} ${
+        outcome.voided === 1 ? "entry" : "entries"
+      } cleared. Every total starts from zero.`,
       { parse_mode: "HTML" },
     );
   });

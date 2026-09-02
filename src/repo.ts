@@ -195,6 +195,21 @@ export async function getUserTotal(
   return row?.total ?? 0;
 }
 
+/** Live (non-voided) entry count for a chat — what /reset is about to clear. */
+export async function countActiveEvents(
+  db: D1Database,
+  chatId: number,
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM score_events
+       WHERE telegram_chat_id = ?1 AND voided_at IS NULL`,
+    )
+    .bind(chatId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 export async function getUserRecentEvents(
   db: D1Database,
   chatId: number,
@@ -281,6 +296,29 @@ export async function voidScoreEvent(
     return current ? { status: "already_voided", event: current } : { status: "not_found" };
   }
   return { status: "voided", event: updated };
+}
+
+/**
+ * Bulk void — every live entry in the chat, in one statement. Same rule as
+ * voidScoreEvent (corrections void, they never delete); the rows keep their
+ * points and their history, they just stop counting. Returns how many were
+ * voided by this call.
+ */
+export async function voidAllEvents(
+  db: D1Database,
+  chatId: number,
+  voidedByUserId: number,
+  nowIso: string,
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE score_events
+       SET voided_at = ?1, voided_by_user_id = ?2
+       WHERE telegram_chat_id = ?3 AND voided_at IS NULL`,
+    )
+    .bind(nowIso, voidedByUserId, chatId)
+    .run();
+  return result.meta.changes ?? 0;
 }
 
 export async function getDisplayName(
