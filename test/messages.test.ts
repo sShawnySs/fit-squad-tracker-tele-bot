@@ -77,11 +77,20 @@ describe("confirmation templates", () => {
   it("bolds the variable placeholders so they render bold in the group", () => {
     for (const bucket of BUCKETS) {
       for (const line of templatesFor(bucket)) {
-        for (const token of ["{name}", "{activity}", "{intensity}", "{points}"]) {
+        for (const token of ["{name}", "{activity}", "{intensity}", "{duration}", "{points}"]) {
           if (line.includes(token)) {
             expect(line, line).toContain(`<b>${token}</b>`);
           }
         }
+      }
+    }
+  });
+
+  it("every line names the workout and how long it lasted", () => {
+    for (const bucket of BUCKETS) {
+      for (const line of templatesFor(bucket)) {
+        expect(line, line).toContain("{activity}");
+        expect(line, line).toContain("{duration}");
       }
     }
   });

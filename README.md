@@ -246,9 +246,11 @@ per chat per bucket).
 
 Editing is just editing the array. Three things to keep true:
 
-- Placeholders are `{name}`, `{activity}`, `{intensity}`, `{points}`, and each is
-  wrapped in `<b>…</b>` in the copy so it renders bold in the group. The values
-  themselves are HTML-escaped before they reach the template.
+- Placeholders are `{name}`, `{activity}`, `{intensity}`, `{duration}`,
+  `{points}`, each wrapped in `<b>…</b>` in the copy so it renders bold in the
+  group. The values themselves are HTML-escaped before they reach the template.
+  Every line references `{activity}` and `{duration}`, not just the intensity —
+  a test enforces it.
 - `<b>…</b>` is the only markup a line may carry — no bare `<`, `>` or `&`, since
   every message goes out in HTML parse mode. A test enforces both the balanced
   tags and the bolded placeholders.
