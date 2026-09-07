@@ -244,13 +244,18 @@ picked at random from the bucket matching the intensity, never repeating the one
 used last in that chat for that bucket (`chat_template_state` holds one pointer
 per chat per bucket).
 
-Editing is just editing the array. Two things to keep true:
+Editing is just editing the array. Three things to keep true:
 
-- No `<`, `>` or `&` in the copy — every message goes out in HTML parse mode.
-  A test enforces this.
-- Placeholders are `{name}`, `{activity}`, `{intensity}`, `{points}`. Lines that
-  name their intensity inline ("a light {activity}") are why buckets can't be
-  shared.
+- Placeholders are `{name}`, `{activity}`, `{intensity}`, `{points}`, and each is
+  wrapped in `<b>…</b>` in the copy so it renders bold in the group. The values
+  themselves are HTML-escaped before they reach the template.
+- `<b>…</b>` is the only markup a line may carry — no bare `<`, `>` or `&`, since
+  every message goes out in HTML parse mode. A test enforces both the balanced
+  tags and the bolded placeholders.
+- Lines that name their intensity inline ("a light {activity}") are why buckets
+  can't be shared. The tone is loud, hyperbolic and affectionately unhinged
+  ("chose violence", "psycho (affectionate)") — keep it. Just no profanity and
+  no shorthand.
 
 An intensity added to the database later with no bucket of its own falls back by
 multiplier: ≥2.0 gets the hard lines, ≥1.5 moderate, below that light.

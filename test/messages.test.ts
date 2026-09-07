@@ -62,10 +62,26 @@ describe("confirmation templates", () => {
     }
   });
 
-  it("has no HTML-breaking characters in the copy", () => {
+  it("uses only balanced <b> tags in the copy, no other markup or bare < > &", () => {
     for (const bucket of BUCKETS) {
       for (const line of templatesFor(bucket)) {
-        expect(line, line).not.toMatch(/[<>&]/);
+        const open = line.match(/<b>/g)?.length ?? 0;
+        const close = line.match(/<\/b>/g)?.length ?? 0;
+        expect(close, line).toBe(open);
+        const withoutBold = line.replaceAll("<b>", "").replaceAll("</b>", "");
+        expect(withoutBold, line).not.toMatch(/[<>&]/);
+      }
+    }
+  });
+
+  it("bolds the variable placeholders so they render bold in the group", () => {
+    for (const bucket of BUCKETS) {
+      for (const line of templatesFor(bucket)) {
+        for (const token of ["{name}", "{activity}", "{intensity}", "{points}"]) {
+          if (line.includes(token)) {
+            expect(line, line).toContain(`<b>${token}</b>`);
+          }
+        }
       }
     }
   });
